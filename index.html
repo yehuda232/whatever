@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f5f5f5;
+    color: #1a1a1a;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  .app { max-width: 900px; margin: 0 auto; padding: 20px 16px; }
+  h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { color: #555; font-size: 13px; margin-bottom: 24px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .card h2 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+  .badge-buy { background: #dbeafe; color: #1d4ed8; }
+  .badge-lease { background: #fce7f3; color: #be185d; }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: #555; margin-bottom: 4px; font-weight: 500; }
+  .field input[type=number], .field select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    color: #1a1a1a;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus, .field select:focus { border-color: #6366f1; }
+
+  .range-wrap { display: flex; align-items: center; gap: 8px; }
+  .range-wrap input[type=range] { flex: 1; accent-color: #6366f1; }
+  .range-val {
+    min-width: 48px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 600;
+    color: #6366f1;
+  }
+
+  .results { margin-bottom: 24px; }
+  .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 600px) { .result-grid { grid-template-columns: 1fr; } }
+
+  .result-card {
+    border-radius: 10px;
+    padding: 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .result-card.buy { background: #eff6ff; border: 2px solid #3b82f6; }
+  .result-card.lease { background: #fdf2f8; border: 2px solid #ec4899; }
+
+  .result-card .winner-tag {
+    position: absolute;
+    top: 12px; right: 12px;
+    background: #22c55e;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .result-label { font-size: 12px; font-weight: 600; color: #555; margin-bottom: 2px; }
+  .result-total { font-size: 26px; font-weight: 800; margin-bottom: 12px; }
+  .result-card.buy .result-total { color: #1d4ed8; }
+  .result-card.lease .result-total { color: #be185d; }
+
+  .breakdown { list-style: none; }
+  .breakdown li {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    color: #444;
+  }
+  .breakdown li:last-child { border-bottom: none; }
+  .breakdown li span:last-child { font-weight: 600; }
+
+  .verdict {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .chart-section { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+  .chart-section h3 { font-size: 13px; font-weight: 700; margin-bottom: 14px; color: #555; }
+
+  canvas { width: 100% !important; }
+
+  .yearly-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .yearly-table th { text-align: left; padding: 6px 8px; background: #f5f5f5; font-weight: 600; color: #555; border-bottom: 1px solid #ddd; }
+  .yearly-table td { padding: 6px 8px; border-bottom: 1px solid #eee; }
+  .yearly-table tr:last-child td { border-bottom: none; }
+  .buy-col { color: #1d4ed8; font-weight: 600; }
+  .lease-col { color: #be185d; font-weight: 600; }
+  .better { background: #f0fdf4; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Car Lease vs. Buy Calculator</h1>
+  <p class="subtitle">Compare the true total cost of leasing vs. buying over your ownership term.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Vehicle &amp; Shared</h2>
+      <div class="field">
+        <label>Vehicle Price ($)</label>
+        <input type="number" id="price" value="35000" min="1000" step="500">
+      </div>
+      <div class="field">
+        <label>Sales Tax Rate (%)</label>
+        <div class="range-wrap">
+          <input type="range" id="taxRate" min="0" max="15" step="0.1" value="8">
+          <span class="range-val" id="taxRateVal">8.0%</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Term (years)</label>
+        <div class="range-wrap">
+          <input type="range" id="term" min="1" max="10" step="1" value="3">
+          <span class="range-val" id="termVal">3 yr</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Annual Miles Driven</label>
+        <input type="number" id="miles" value="12000" min="1000" step="1000">
+      </div>
+      <div class="field">
+        <label>Insurance ($/mo, both same)</label>
+        <input type="number" id="insurance" value="150" min="0" step="10">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Buying <span class="badge badge-buy">BUY</span></h2>
+      <div class="field">
+        <label>Down Payment ($)</label>
+        <input type="number" id="buyDown" value="5000" min="0" step="500">
+      </div>
+      <div class="field">
+        <label>Loan Interest Rate (% APR)</label>
+        <div class="range-wrap">
+          <input type="range" id="buyRate" min="0" max="20" step="0.1" value="6.5">
+          <span class="range-val" id="buyRateVal">6.5%</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Loan Term (years)</label>
+        <div class="range-wrap">
+          <input type="range" id="loanTerm" min="1" max="8" step="1" value="5">
+          <span class="range-val" id="loanTermVal">5 yr</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Annual Depreciation (%)</label>
+        <div class="range-wrap">
+          <input type="range" id="depreciation" min="5" max="30" step="0.5" value="15">
+          <span class="range-val" id="depreciationVal">15.0%</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Annual Maintenance ($)</label>
+        <input type="number" id="maintenance" value="800" min="0" step="100">
+      </div>
+    </div>
+
+    <div class="card" style="grid-column: 1 / -1;">
+      <h2>Leasing <span class="badge badge-lease">LEASE</span></h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+        <div class="field">
+          <label>Monthly Payment ($)</label>
+          <input type="number" id="leasePayment" value="450" min="0" step="10">
+        </div>
+        <div class="field">
+          <label>Due at Signing ($)</label>
+          <input type="number" id="leaseSigning" value="3000" min="0" step="100">
+        </div>
+        <div class="field">
+          <label>Excess Miles Fee (&#162;/mi)</label>
+          <input type="number" id="milesFee" value="25" min="0" max="100" step="1">
+        </div>
+        <div class="field">
+          <label>Lease Allowed Miles/yr</label>
+          <input type="number" id="leaseAllowed" value="12000" min="5000" step="1000">
+        </div>
+        <div class="field">
+          <label>Acquisition Fee ($)</label>
+          <input type="number" id="acqFee" value="895" min="0" step="50">
+        </div>
+        <div class="field">
+          <label>Disposition Fee ($)</label>
+          <input type="number" id="dispFee" value="395" min="0" step="50">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="results">
+    <div class="result-grid" id="resultGrid"></div>
+  </div>
+
+  <div class="verdict" id="verdict"></div>
+
+  <div class="chart-section">
+    <h3>Cumulative Out-of-Pocket Cost Over Time</h3>
+    <canvas id="costChart" height="220"></canvas>
+  </div>
+
+  <div class="chart-section">
+    <h3>Year-by-Year Breakdown</h3>
+    <div id="yearlyTable"></div>
+  </div>
+</div>
+
+<script>
+function fmt(n) {
+  return '$' + Math.round(n).toLocaleString();
+}
+
+function calcAll() {
+  const price = +document.getElementById('price').value || 35000;
+  const taxRate = +document.getElementById('taxRate').value / 100;
+  const term = +document.getElementById('term').value || 3;
+  const miles = +document.getElementById('miles').value || 12000;
+  const insurance = +document.getElementById('insurance').value || 150;
+
+  const buyDown = +document.getElementById('buyDown').value || 0;
+  const buyRate = +document.getElementById('buyRate').value / 100 / 12;
+  const loanTerm = +document.getElementById('loanTerm').value || 5;
+  const depreciation = +document.getElementById('depreciation').value / 100;
+  const maintenance = +document.getElementById('maintenance').value || 0;
+
+  const leasePayment = +document.getElementById('leasePayment').value || 0;
+  const leaseSigning = +document.getElementById('leaseSigning').value || 0;
+  const milesFee = +document.getElementById('milesFee').value / 100;
+  const leaseAllowed = +document.getElementById('leaseAllowed').value || 12000;
+  const acqFee = +document.getElementById('acqFee').value || 0;
+  const dispFee = +document.getElementById('dispFee').value || 0;
+
+  const loanAmount = price - buyDown;
+  const loanMonths = loanTerm * 12;
+  let monthlyLoan = 0;
+  if (buyRate === 0) {
+    monthlyLoan = loanAmount / loanMonths;
+  } else {
+    monthlyLoan = loanAmount * (buyRate * Math.pow(1 + buyRate, loanMonths)) / (Math.pow(1 + buyRate, loanMonths) - 1);
+  }
+
+  let residual = price;
+  for (let y = 0; y < term; y++) residual *= (1 - depreciation);
+
+  const termMonths = term * 12;
+  const buyTax = price * taxRate;
+  const buyMaintenanceTotal = maintenance * term;
+  const buyInsuranceTotal = insurance * 12 * term;
+
+  let balance = loanAmount;
+  let totalInterest = 0;
+  let totalLoanPayments = 0;
+  for (let m = 0; m < termMonths; m++) {
+    if (balance <= 0) break;
+    const interestM = balance * buyRate;
+    totalInterest += interestM;
+    const principalM = Math.min(monthlyLoan - interestM, balance);
+    balance -= principalM;
+    totalLoanPayments += (interestM + principalM);
+  }
+
+  const buyOutOfPocket = buyDown + buyTax + totalLoanPayments + buyMaintenanceTotal + buyInsuranceTotal;
+  const buyNetCost = buyOutOfPocket - residual;
+
+  const leasePaymentsTotal = leasePayment * termMonths;
+  const excessMiles = Math.max(0, (miles - leaseAllowed) * term);
+  const excessMilesCost = excessMiles * milesFee;
+  const leaseTax = leasePaymentsTotal * taxRate;
+  const leaseInsuranceTotal = insurance * 12 * term;
+  const leaseTotal = leaseSigning + acqFee + leasePaymentsTotal + leaseTax + excessMilesCost + dispFee + leaseInsuranceTotal;
+
+  let buyYearlyOut = [];
+  let leaseYearlyOut = [];
+  let buyRunning = buyDown + buyTax;
+  let leaseRunning = leaseSigning + acqFee;
+  let loanBal = loanAmount;
+  let carVal = price;
+
+  for (let y = 1; y <= term; y++) {
+    let yearLoanPaid = 0;
+    for (let m = 0; m < 12; m++) {
+      if (loanBal <= 0) break;
+      const iM = loanBal * buyRate;
+      const pM = Math.min(monthlyLoan - iM, loanBal);
+      yearLoanPaid += (iM + pM);
+      loanBal -= pM;
+    }
+    carVal *= (1 - depreciation);
+    buyRunning += yearLoanPaid + maintenance + insurance * 12;
+    buyYearlyOut.push({ year: y, cumCost: buyRunning, netCost: buyRunning - carVal });
+
+    const leaseYear = leasePayment * 12 + leaseInsuranceTotal / term;
+    const leaseYearTax = leasePayment * 12 * taxRate;
+    leaseRunning += leaseYear + leaseYearTax;
+    if (y === term) leaseRunning += dispFee + excessMilesCost;
+    leaseYearlyOut.push({ year: y, cumCost: leaseRunning });
+  }
+
+  return {
+    buy: { total: buyNetCost, outOfPocket: buyOutOfPocket, residual, down: buyDown + buyTax, loanPayments: totalLoanPayments, maintenance: buyMaintenanceTotal, insurance: buyInsuranceTotal, monthly: (buyNetCost / termMonths).toFixed(0), yearly: buyYearlyOut },
+    lease: { total: leaseTotal, signing: leaseSigning + acqFee, payments: leasePaymentsTotal, tax: leaseTax, excess: excessMilesCost, disp: dispFee, insurance: leaseInsuranceTotal, monthly: (leaseTotal / termMonths).toFixed(0), yearly: leaseYearlyOut },
+    term, miles, leaseAllowed
+  };
+}
+
+function renderResults(d) {
+  const buyWins = d.buy.total < d.lease.total;
+  const diff = Math.abs(d.buy.total - d.lease.total);
+  const diffPct = (diff / Math.max(d.buy.total, d.lease.total) * 100).toFixed(0);
+
+  document.getElementById('resultGrid').innerHTML = `
+    <div class="result-card buy">
+      ${buyWins ? '<div class="winner-tag">Lower Cost</div>' : ''}
+      <div class="result-label">BUY — Net Cost (after resale)</div>
+      <div class="result-total">${fmt(d.buy.total)}</div>
+      <ul class="breakdown">
+        <li><span>Down + Tax</span><span>${fmt(d.buy.down)}</span></li>
+        <li><span>Loan Payments</span><span>${fmt(d.buy.loanPayments)}</span></li>
+        <li><span>Maintenance</span><span>${fmt(d.buy.maintenance)}</span></li>
+        <li><span>Insurance</span><span>${fmt(d.buy.insurance)}</span></li>
+        <li><span>− Resale Value</span><span style="color:#22c55e">−${fmt(d.buy.residual)}</span></li>
+        <li><span>Effective $/mo</span><span>${fmt(d.buy.monthly)}/mo</span></li>
+      </ul>
+    </div>
+    <div class="result-card lease">
+      ${!buyWins ? '<div class="winner-tag">Lower Cost</div>' : ''}
+      <div class="result-label">LEASE — Total Cost</div>
+      <div class="result-total">${fmt(d.lease.total)}</div>
+      <ul class="breakdown">
+        <li><span>Due at Signing + Fees</span><span>${fmt(d.lease.signing)}</span></li>
+        <li><span>Monthly Payments</span><span>${fmt(d.lease.payments)}</span></li>
+        <li><span>Tax on Payments</span><span>${fmt(d.lease.tax)}</span></li>
+        <li><span>Excess Miles</span><span>${fmt(d.lease.excess)}</span></li>
+        <li><span>Insurance</span><span>${fmt(d.lease.insurance)}</span></li>
+        <li><span>Disposition Fee</span><span>${fmt(d.lease.disp)}</span></li>
+        <li><span>Effective $/mo</span><span>${fmt(d.lease.monthly)}/mo</span></li>
+      </ul>
+    </div>`;
+
+  document.getElementById('verdict').innerHTML = `
+    <strong>${buyWins ? 'Buying' : 'Leasing'} costs ${fmt(diff)} less (${diffPct}%) over ${d.term} year${d.term>1?'s':''}.</strong>
+    ${buyWins
+      ? ` After ${d.term} year${d.term>1?'s':''}, your car is worth approximately <strong>${fmt(d.buy.residual)}</strong> — that equity is the key advantage of buying.`
+      : ` Leasing wins here because the lower monthly commitment outweighs the lack of equity. Consider buying if you plan to keep the car long-term.`
+    }
+    ${d.lease.excess > 0 ? ` <span style="color:#b45309">⚠ You'll drive ~${Math.round(d.miles - d.leaseAllowed)} excess miles/yr, costing <strong>${fmt(d.lease.excess)}</strong> total.</span>` : ''}`;
+}
+
+function drawChart(d) {
+  const canvas = document.getElementById('costChart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth * (window.devicePixelRatio || 1);
+  const H = 260 * (window.devicePixelRatio || 1);
+  canvas.width = W;
+  canvas.height = H;
+  ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+  const w = canvas.offsetWidth, h = 260;
+  const pad = { top: 20, right: 20, bottom: 40, left: 70 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+
+  const buyPts = [0, ...d.buy.yearly.map(y => y.netCost)];
+  const leasePts = [0, ...d.lease.yearly.map(y => y.cumCost)];
+  const allVals = [...buyPts, ...leasePts];
+  const minV = Math.min(...allVals);
+  const maxV = Math.max(...allVals);
+  const range = maxV - minV || 1;
+
+  function xPos(i) { return pad.left + (i / d.term) * cw; }
+  function yPos(v) { return pad.top + ch - ((v - minV) / range) * ch; }
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (ch / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
+    const val = maxV - (range / 4) * i;
+    ctx.fillStyle = '#888'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('$' + Math.round(val / 1000) + 'k', pad.left - 6, y + 4);
+  }
+  ctx.fillStyle = '#888'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  for (let i = 0; i <= d.term; i++) {
+    ctx.fillText('Yr ' + i, xPos(i), h - pad.bottom + 18);
+  }
+
+  function drawLine(pts, color, dashed) {
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+    if (dashed) ctx.setLineDash([6,4]); else ctx.setLineDash([]);
+    pts.forEach((v, i) => { if (i === 0) ctx.moveTo(xPos(i), yPos(v)); else ctx.lineTo(xPos(i), yPos(v)); });
+    ctx.stroke(); ctx.setLineDash([]);
+    pts.forEach((v, i) => { ctx.beginPath(); ctx.arc(xPos(i), yPos(v), 4, 0, Math.PI*2); ctx.fillStyle = color; ctx.fill(); });
+  }
+
+  drawLine(buyPts, '#3b82f6', false);
+  drawLine(leasePts, '#ec4899', true);
+
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#3b82f6'; ctx.fillRect(pad.left, 2, 24, 3);
+  ctx.fillStyle = '#1d4ed8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('Buy (net of resale)', pad.left + 30, 8);
+  ctx.strokeStyle = '#ec4899'; ctx.lineWidth = 2; ctx.setLineDash([6,4]);
+  ctx.beginPath(); ctx.moveTo(pad.left + 130, 5); ctx.lineTo(pad.left + 154, 5); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#be185d';
+  ctx.fillText('Lease (total out-of-pocket)', pad.left + 160, 8);
+}
+
+function renderTable(d) {
+  let rows = '';
+  for (let y = 1; y <= d.term; y++) {
+    const bd = d.buy.yearly[y-1];
+    const ld = d.lease.yearly[y-1];
+    const buyBetter = bd.netCost < ld.cumCost;
+    rows += `<tr class="${buyBetter ? 'better' : ''}">
+      <td>Year ${y}</td>
+      <td class="buy-col">${fmt(bd.netCost)}</td>
+      <td class="lease-col">${fmt(ld.cumCost)}</td>
+      <td>${buyBetter ? '✓ Buy' : '✓ Lease'}</td>
+    </tr>`;
+  }
+  document.getElementById('yearlyTable').innerHTML = `
+    <table class="yearly-table">
+      <thead><tr><th>Year</th><th class="buy-col">Buy Net Cost</th><th class="lease-col">Lease Total</th><th>Lower Cost</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function update() {
+  const d = calcAll();
+  renderResults(d);
+  renderTable(d);
+  setTimeout(() => drawChart(d), 0);
+}
+
+['taxRate','term','buyRate','loanTerm','depreciation'].forEach(id => {
+  const el = document.getElementById(id);
+  const val = document.getElementById(id + 'Val');
+  el.addEventListener('input', () => {
+    if (id === 'term') val.textContent = el.value + ' yr';
+    else if (id === 'loanTerm') val.textContent = el.value + ' yr';
+    else val.textContent = parseFloat(el.value).toFixed(1) + '%';
+    update();
+  });
+});
+
+document.querySelectorAll('input[type=number], select').forEach(el => el.addEventListener('input', update));
+window.addEventListener('resize', () => drawChart(calcAll()));
+update();
+</script>
+</body>
+</html>
