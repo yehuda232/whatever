@@ -13,7 +13,54 @@
 
   .app { max-width: 900px; margin: 0 auto; padding: 20px 16px; }
   h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
-  .subtitle { color: #555; font-size: 13px; margin-bottom: 24px; }
+  .subtitle { color: #555; font-size: 13px; margin-bottom: 16px; }
+
+  .car-selector {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+  .car-selector h2 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+  .car-selector-grid { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
+  @media (max-width: 600px) { .car-selector-grid { grid-template-columns: 1fr 1fr; } }
+  .car-selector select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    color: #1a1a1a;
+    outline: none;
+  }
+  .car-selector select:focus { border-color: #6366f1; }
+  .autofill-btn {
+    padding: 8px 16px;
+    background: #6366f1;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .autofill-btn:hover { background: #4f46e5; }
+  .autofill-btn:disabled { background: #aaa; cursor: not-allowed; }
+  .autofill-note { font-size: 11px; color: #888; margin-top: 10px; }
+  .filled-tag {
+    display: inline-block;
+    font-size: 10px;
+    background: #d1fae5;
+    color: #065f46;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
 
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
   @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
@@ -137,6 +184,26 @@
 <div class="app">
   <h1>Car Lease vs. Buy Calculator</h1>
   <p class="subtitle">Compare the true total cost of leasing vs. buying over your ownership term.</p>
+
+  <div class="car-selector">
+    <h2>Auto-fill by Car <span id="filledTag" class="filled-tag" style="display:none">✓ Filled</span></h2>
+    <div class="car-selector-grid">
+      <div class="field" style="margin:0">
+        <label>Make</label>
+        <select id="selMake"><option value="">— Select Make —</option></select>
+      </div>
+      <div class="field" style="margin:0">
+        <label>Model</label>
+        <select id="selModel" disabled><option value="">— Select Model —</option></select>
+      </div>
+      <div class="field" style="margin:0">
+        <label>Year</label>
+        <select id="selYear" disabled><option value="">— Select Year —</option></select>
+      </div>
+      <button class="autofill-btn" id="autofillBtn" disabled onclick="doAutofill()">Auto-fill</button>
+    </div>
+    <p class="autofill-note">Fills in: vehicle price, depreciation rate, and annual maintenance based on published averages. All values can still be edited manually.</p>
+  </div>
 
   <div class="grid">
     <div class="card">
@@ -476,6 +543,168 @@ function update() {
   renderTable(d);
   setTimeout(() => drawChart(d), 0);
 }
+
+// ---- CAR DATABASE ----
+// price: MSRP, depr: annual depreciation %, maint: annual maintenance $
+const CAR_DATA = {
+  Toyota: {
+    Camry:   { 2025:{price:27000,depr:13,maint:500}, 2024:{price:26200,depr:14,maint:500}, 2023:{price:25500,depr:15,maint:500}, 2022:{price:25000,depr:16,maint:520}, 2021:{price:24500,depr:17,maint:540}, 2020:{price:24000,depr:18,maint:560} },
+    Corolla: { 2025:{price:21550,depr:13,maint:450}, 2024:{price:21000,depr:14,maint:450}, 2023:{price:20600,depr:15,maint:460}, 2022:{price:20000,depr:16,maint:470}, 2021:{price:19600,depr:17,maint:480}, 2020:{price:19200,depr:18,maint:490} },
+    RAV4:    { 2025:{price:30000,depr:12,maint:520}, 2024:{price:29300,depr:13,maint:520}, 2023:{price:28500,depr:14,maint:530}, 2022:{price:27500,depr:15,maint:540}, 2021:{price:26500,depr:16,maint:550}, 2020:{price:26000,depr:17,maint:560} },
+    Highlander:{ 2025:{price:38000,depr:13,maint:600}, 2024:{price:37000,depr:14,maint:600}, 2023:{price:36000,depr:15,maint:610}, 2022:{price:35000,depr:16,maint:620}, 2021:{price:34000,depr:17,maint:630}, 2020:{price:33500,depr:18,maint:640} },
+    Tacoma:  { 2025:{price:32000,depr:10,maint:550}, 2024:{price:31000,depr:11,maint:550}, 2023:{price:30000,depr:12,maint:560}, 2022:{price:29000,depr:13,maint:570}, 2021:{price:28000,depr:14,maint:580}, 2020:{price:27000,depr:15,maint:590} },
+    Prius:   { 2025:{price:28000,depr:13,maint:430}, 2024:{price:27500,depr:14,maint:430}, 2023:{price:26000,depr:15,maint:440}, 2022:{price:25000,depr:16,maint:450}, 2021:{price:24500,depr:17,maint:460}, 2020:{price:24000,depr:18,maint:470} },
+  },
+  Honda: {
+    Civic:   { 2025:{price:24000,depr:14,maint:480}, 2024:{price:23400,depr:15,maint:480}, 2023:{price:22900,depr:16,maint:490}, 2022:{price:22000,depr:17,maint:500}, 2021:{price:21500,depr:18,maint:510}, 2020:{price:21000,depr:19,maint:520} },
+    Accord:  { 2025:{price:28000,depr:14,maint:520}, 2024:{price:27300,depr:15,maint:520}, 2023:{price:26500,depr:16,maint:530}, 2022:{price:26000,depr:17,maint:540}, 2021:{price:25500,depr:18,maint:550}, 2020:{price:25000,depr:19,maint:560} },
+    'CR-V':  { 2025:{price:31000,depr:13,maint:530}, 2024:{price:30200,depr:14,maint:530}, 2023:{price:29500,depr:15,maint:540}, 2022:{price:28500,depr:16,maint:550}, 2021:{price:27500,depr:17,maint:560}, 2020:{price:27000,depr:18,maint:570} },
+    Pilot:   { 2025:{price:40000,depr:14,maint:620}, 2024:{price:39000,depr:15,maint:620}, 2023:{price:38000,depr:16,maint:630}, 2022:{price:37000,depr:17,maint:640}, 2021:{price:36000,depr:18,maint:650}, 2020:{price:35000,depr:19,maint:660} },
+    Ridgeline:{ 2025:{price:38000,depr:14,maint:580}, 2024:{price:37000,depr:15,maint:580}, 2023:{price:36000,depr:16,maint:590}, 2022:{price:35000,depr:17,maint:600}, 2021:{price:34000,depr:18,maint:610}, 2020:{price:33000,depr:19,maint:620} },
+  },
+  Ford: {
+    'F-150': { 2025:{price:36000,depr:16,maint:700}, 2024:{price:35000,depr:17,maint:700}, 2023:{price:33500,depr:18,maint:710}, 2022:{price:32000,depr:19,maint:720}, 2021:{price:30000,depr:20,maint:730}, 2020:{price:28500,depr:21,maint:740} },
+    Mustang: { 2025:{price:32000,depr:17,maint:750}, 2024:{price:31000,depr:18,maint:750}, 2023:{price:30000,depr:19,maint:760}, 2022:{price:29000,depr:20,maint:770}, 2021:{price:28000,depr:21,maint:780}, 2020:{price:27000,depr:22,maint:790} },
+    Explorer:{ 2025:{price:38000,depr:17,maint:720}, 2024:{price:37000,depr:18,maint:720}, 2023:{price:36000,depr:19,maint:730}, 2022:{price:35000,depr:20,maint:740}, 2021:{price:34000,depr:21,maint:750}, 2020:{price:33000,depr:22,maint:760} },
+    Bronco:  { 2025:{price:35000,depr:13,maint:680}, 2024:{price:34000,depr:14,maint:680}, 2023:{price:33000,depr:15,maint:690}, 2022:{price:32000,depr:16,maint:700}, 2021:{price:30000,depr:17,maint:710}, 2020:{price:0,depr:0,maint:0} },
+    Escape:  { 2025:{price:28000,depr:17,maint:620}, 2024:{price:27000,depr:18,maint:620}, 2023:{price:26500,depr:19,maint:630}, 2022:{price:26000,depr:20,maint:640}, 2021:{price:25500,depr:21,maint:650}, 2020:{price:25000,depr:22,maint:660} },
+  },
+  Chevrolet: {
+    Silverado:{ 2025:{price:37000,depr:17,maint:720}, 2024:{price:36000,depr:18,maint:720}, 2023:{price:34500,depr:19,maint:730}, 2022:{price:33000,depr:20,maint:740}, 2021:{price:31500,depr:21,maint:750}, 2020:{price:30000,depr:22,maint:760} },
+    Equinox: { 2025:{price:28000,depr:18,maint:640}, 2024:{price:27000,depr:19,maint:640}, 2023:{price:26000,depr:20,maint:650}, 2022:{price:25500,depr:21,maint:660}, 2021:{price:25000,depr:22,maint:670}, 2020:{price:24500,depr:23,maint:680} },
+    Tahoe:   { 2025:{price:56000,depr:15,maint:800}, 2024:{price:54000,depr:16,maint:800}, 2023:{price:52000,depr:17,maint:810}, 2022:{price:50000,depr:18,maint:820}, 2021:{price:48000,depr:19,maint:830}, 2020:{price:46000,depr:20,maint:840} },
+    Malibu:  { 2025:{price:23000,depr:20,maint:600}, 2024:{price:22000,depr:21,maint:600}, 2023:{price:21500,depr:22,maint:610}, 2022:{price:21000,depr:23,maint:620}, 2021:{price:20500,depr:24,maint:630}, 2020:{price:20000,depr:25,maint:640} },
+  },
+  BMW: {
+    '3 Series':{ 2025:{price:45000,depr:18,maint:1200}, 2024:{price:43500,depr:19,maint:1200}, 2023:{price:42000,depr:20,maint:1250}, 2022:{price:41000,depr:21,maint:1300}, 2021:{price:40000,depr:22,maint:1350}, 2020:{price:39000,depr:23,maint:1400} },
+    '5 Series':{ 2025:{price:56000,depr:18,maint:1300}, 2024:{price:54000,depr:19,maint:1300}, 2023:{price:52000,depr:20,maint:1350}, 2022:{price:50000,depr:21,maint:1400}, 2021:{price:48000,depr:22,maint:1450}, 2020:{price:46000,depr:23,maint:1500} },
+    X3:      { 2025:{price:48000,depr:17,maint:1200}, 2024:{price:46500,depr:18,maint:1200}, 2023:{price:45000,depr:19,maint:1250}, 2022:{price:44000,depr:20,maint:1300}, 2021:{price:43000,depr:21,maint:1350}, 2020:{price:42000,depr:22,maint:1400} },
+    X5:      { 2025:{price:65000,depr:17,maint:1400}, 2024:{price:63000,depr:18,maint:1400}, 2023:{price:61000,depr:19,maint:1450}, 2022:{price:59000,depr:20,maint:1500}, 2021:{price:57000,depr:21,maint:1550}, 2020:{price:55000,depr:22,maint:1600} },
+  },
+  Mercedes: {
+    'C-Class':{ 2025:{price:47000,depr:18,maint:1300}, 2024:{price:45500,depr:19,maint:1300}, 2023:{price:44000,depr:20,maint:1350}, 2022:{price:43000,depr:21,maint:1400}, 2021:{price:42000,depr:22,maint:1450}, 2020:{price:41000,depr:23,maint:1500} },
+    'E-Class':{ 2025:{price:58000,depr:18,maint:1400}, 2024:{price:56000,depr:19,maint:1400}, 2023:{price:54000,depr:20,maint:1450}, 2022:{price:52000,depr:21,maint:1500}, 2021:{price:50000,depr:22,maint:1550}, 2020:{price:48000,depr:23,maint:1600} },
+    GLC:     { 2025:{price:50000,depr:17,maint:1300}, 2024:{price:48500,depr:18,maint:1300}, 2023:{price:47000,depr:19,maint:1350}, 2022:{price:46000,depr:20,maint:1400}, 2021:{price:45000,depr:21,maint:1450}, 2020:{price:44000,depr:22,maint:1500} },
+    GLE:     { 2025:{price:62000,depr:17,maint:1500}, 2024:{price:60000,depr:18,maint:1500}, 2023:{price:58000,depr:19,maint:1550}, 2022:{price:56000,depr:20,maint:1600}, 2021:{price:54000,depr:21,maint:1650}, 2020:{price:52000,depr:22,maint:1700} },
+  },
+  Tesla: {
+    'Model 3':{ 2025:{price:40000,depr:14,maint:300}, 2024:{price:38990,depr:15,maint:300}, 2023:{price:40240,depr:16,maint:310}, 2022:{price:46990,depr:17,maint:320}, 2021:{price:44990,depr:18,maint:330}, 2020:{price:37990,depr:19,maint:340} },
+    'Model Y': { 2025:{price:44990,depr:13,maint:310}, 2024:{price:43990,depr:14,maint:310}, 2023:{price:47740,depr:15,maint:320}, 2022:{price:65990,depr:16,maint:330}, 2021:{price:53990,depr:17,maint:340}, 2020:{price:49990,depr:18,maint:350} },
+    'Model S': { 2025:{price:74990,depr:15,maint:350}, 2024:{price:74990,depr:16,maint:350}, 2023:{price:74990,depr:17,maint:360}, 2022:{price:104990,depr:18,maint:370}, 2021:{price:79990,depr:19,maint:380}, 2020:{price:74990,depr:20,maint:390} },
+    'Model X': { 2025:{price:79990,depr:15,maint:380}, 2024:{price:79990,depr:16,maint:380}, 2023:{price:98490,depr:17,maint:390}, 2022:{price:120990,depr:18,maint:400}, 2021:{price:89990,depr:19,maint:410}, 2020:{price:79990,depr:20,maint:420} },
+  },
+  Hyundai: {
+    Elantra: { 2025:{price:21000,depr:15,maint:460}, 2024:{price:20500,depr:16,maint:460}, 2023:{price:20000,depr:17,maint:470}, 2022:{price:19500,depr:18,maint:480}, 2021:{price:19200,depr:19,maint:490}, 2020:{price:19000,depr:20,maint:500} },
+    Tucson:  { 2025:{price:28000,depr:15,maint:520}, 2024:{price:27000,depr:16,maint:520}, 2023:{price:26500,depr:17,maint:530}, 2022:{price:26000,depr:18,maint:540}, 2021:{price:25000,depr:19,maint:550}, 2020:{price:24500,depr:20,maint:560} },
+    'Santa Fe':{ 2025:{price:34000,depr:15,maint:580}, 2024:{price:33000,depr:16,maint:580}, 2023:{price:32000,depr:17,maint:590}, 2022:{price:31000,depr:18,maint:600}, 2021:{price:30000,depr:19,maint:610}, 2020:{price:29000,depr:20,maint:620} },
+    Ioniq5:  { 2025:{price:42000,depr:14,maint:320}, 2024:{price:41450,depr:15,maint:320}, 2023:{price:41450,depr:16,maint:330}, 2022:{price:41450,depr:17,maint:340}, 2021:{price:0,depr:0,maint:0}, 2020:{price:0,depr:0,maint:0} },
+  },
+  Kia: {
+    Sorento: { 2025:{price:32000,depr:15,maint:540}, 2024:{price:31000,depr:16,maint:540}, 2023:{price:30000,depr:17,maint:550}, 2022:{price:29500,depr:18,maint:560}, 2021:{price:29000,depr:19,maint:570}, 2020:{price:28000,depr:20,maint:580} },
+    Telluride:{ 2025:{price:36000,depr:12,maint:560}, 2024:{price:35000,depr:13,maint:560}, 2023:{price:34000,depr:14,maint:570}, 2022:{price:33000,depr:15,maint:580}, 2021:{price:32000,depr:16,maint:590}, 2020:{price:31500,depr:17,maint:600} },
+    Sportage:{ 2025:{price:27000,depr:15,maint:500}, 2024:{price:26000,depr:16,maint:500}, 2023:{price:25500,depr:17,maint:510}, 2022:{price:25000,depr:18,maint:520}, 2021:{price:24000,depr:19,maint:530}, 2020:{price:23500,depr:20,maint:540} },
+    EV6:     { 2025:{price:43000,depr:14,maint:320}, 2024:{price:42600,depr:15,maint:320}, 2023:{price:42600,depr:16,maint:330}, 2022:{price:40900,depr:17,maint:340}, 2021:{price:0,depr:0,maint:0}, 2020:{price:0,depr:0,maint:0} },
+  },
+  Jeep: {
+    Wrangler:{ 2025:{price:32000,depr:10,maint:700}, 2024:{price:31000,depr:11,maint:700}, 2023:{price:30000,depr:12,maint:710}, 2022:{price:29000,depr:13,maint:720}, 2021:{price:28500,depr:14,maint:730}, 2020:{price:28000,depr:15,maint:740} },
+    'Grand Cherokee':{ 2025:{price:40000,depr:17,maint:750}, 2024:{price:39000,depr:18,maint:750}, 2023:{price:38000,depr:19,maint:760}, 2022:{price:37000,depr:20,maint:770}, 2021:{price:36000,depr:21,maint:780}, 2020:{price:35000,depr:22,maint:790} },
+    Compass: { 2025:{price:27000,depr:18,maint:650}, 2024:{price:26000,depr:19,maint:650}, 2023:{price:25500,depr:20,maint:660}, 2022:{price:25000,depr:21,maint:670}, 2021:{price:24500,depr:22,maint:680}, 2020:{price:24000,depr:23,maint:690} },
+  },
+  Nissan: {
+    Altima:  { 2025:{price:25000,depr:18,maint:520}, 2024:{price:24400,depr:19,maint:520}, 2023:{price:23900,depr:20,maint:530}, 2022:{price:23400,depr:21,maint:540}, 2021:{price:23000,depr:22,maint:550}, 2020:{price:22500,depr:23,maint:560} },
+    Rogue:   { 2025:{price:29000,depr:17,maint:550}, 2024:{price:28200,depr:18,maint:550}, 2023:{price:27700,depr:19,maint:560}, 2022:{price:27200,depr:20,maint:570}, 2021:{price:26500,depr:21,maint:580}, 2020:{price:26000,depr:22,maint:590} },
+    Frontier:{ 2025:{price:30000,depr:14,maint:590}, 2024:{price:29000,depr:15,maint:590}, 2023:{price:28500,depr:16,maint:600}, 2022:{price:28000,depr:17,maint:610}, 2021:{price:27000,depr:18,maint:620}, 2020:{price:26500,depr:19,maint:630} },
+    Leaf:    { 2025:{price:29000,depr:20,maint:280}, 2024:{price:28040,depr:21,maint:280}, 2023:{price:27800,depr:22,maint:290}, 2022:{price:27400,depr:23,maint:300}, 2021:{price:27400,depr:24,maint:310}, 2020:{price:31600,depr:25,maint:320} },
+  },
+  Subaru: {
+    Outback: { 2025:{price:29000,depr:13,maint:560}, 2024:{price:28195,depr:14,maint:560}, 2023:{price:27645,depr:15,maint:570}, 2022:{price:27145,depr:16,maint:580}, 2021:{price:26645,depr:17,maint:590}, 2020:{price:26645,depr:18,maint:600} },
+    Forester:{ 2025:{price:28000,depr:13,maint:540}, 2024:{price:27195,depr:14,maint:540}, 2023:{price:26395,depr:15,maint:550}, 2022:{price:25895,depr:16,maint:560}, 2021:{price:25395,depr:17,maint:570}, 2020:{price:24795,depr:18,maint:580} },
+    Crosstrek:{ 2025:{price:24000,depr:13,maint:510}, 2024:{price:23645,depr:14,maint:510}, 2023:{price:22895,depr:15,maint:520}, 2022:{price:22645,depr:16,maint:530}, 2021:{price:22245,depr:17,maint:540}, 2020:{price:22245,depr:18,maint:550} },
+  },
+  Ram: {
+    '1500':  { 2025:{price:38000,depr:16,maint:720}, 2024:{price:37000,depr:17,maint:720}, 2023:{price:36000,depr:18,maint:730}, 2022:{price:35000,depr:19,maint:740}, 2021:{price:34000,depr:20,maint:750}, 2020:{price:33000,depr:21,maint:760} },
+    '2500':  { 2025:{price:50000,depr:14,maint:850}, 2024:{price:48500,depr:15,maint:850}, 2023:{price:47000,depr:16,maint:860}, 2022:{price:46000,depr:17,maint:870}, 2021:{price:45000,depr:18,maint:880}, 2020:{price:44000,depr:19,maint:890} },
+  },
+  Volkswagen: {
+    Jetta:   { 2025:{price:22000,depr:16,maint:680}, 2024:{price:21395,depr:17,maint:680}, 2023:{price:20895,depr:18,maint:690}, 2022:{price:19995,depr:19,maint:700}, 2021:{price:18995,depr:20,maint:710}, 2020:{price:18895,depr:21,maint:720} },
+    Tiguan:  { 2025:{price:31000,depr:16,maint:720}, 2024:{price:30195,depr:17,maint:720}, 2023:{price:29695,depr:18,maint:730}, 2022:{price:28695,depr:19,maint:740}, 2021:{price:27995,depr:20,maint:750}, 2020:{price:25995,depr:21,maint:760} },
+    'ID.4':  { 2025:{price:39000,depr:15,maint:320}, 2024:{price:38995,depr:16,maint:320}, 2023:{price:38995,depr:17,maint:330}, 2022:{price:41230,depr:18,maint:340}, 2021:{price:39995,depr:19,maint:350}, 2020:{price:0,depr:0,maint:0} },
+  },
+};
+
+function buildMakeDropdown() {
+  const sel = document.getElementById('selMake');
+  Object.keys(CAR_DATA).sort().forEach(make => {
+    const opt = document.createElement('option');
+    opt.value = make; opt.textContent = make;
+    sel.appendChild(opt);
+  });
+}
+
+function onMakeChange() {
+  const make = document.getElementById('selMake').value;
+  const modelSel = document.getElementById('selModel');
+  const yearSel = document.getElementById('selYear');
+  modelSel.innerHTML = '<option value="">— Select Model —</option>';
+  yearSel.innerHTML = '<option value="">— Select Year —</option>';
+  modelSel.disabled = !make;
+  yearSel.disabled = true;
+  document.getElementById('autofillBtn').disabled = true;
+  if (!make) return;
+  Object.keys(CAR_DATA[make]).sort().forEach(model => {
+    const opt = document.createElement('option');
+    opt.value = model; opt.textContent = model;
+    modelSel.appendChild(opt);
+  });
+}
+
+function onModelChange() {
+  const make = document.getElementById('selMake').value;
+  const model = document.getElementById('selModel').value;
+  const yearSel = document.getElementById('selYear');
+  yearSel.innerHTML = '<option value="">— Select Year —</option>';
+  yearSel.disabled = !model;
+  document.getElementById('autofillBtn').disabled = true;
+  if (!make || !model) return;
+  Object.keys(CAR_DATA[make][model]).sort((a,b) => b-a).forEach(year => {
+    const d = CAR_DATA[make][model][year];
+    if (d.price === 0) return;
+    const opt = document.createElement('option');
+    opt.value = year; opt.textContent = year;
+    yearSel.appendChild(opt);
+  });
+}
+
+function onYearChange() {
+  const hasAll = document.getElementById('selMake').value &&
+                 document.getElementById('selModel').value &&
+                 document.getElementById('selYear').value;
+  document.getElementById('autofillBtn').disabled = !hasAll;
+}
+
+function doAutofill() {
+  const make  = document.getElementById('selMake').value;
+  const model = document.getElementById('selModel').value;
+  const year  = document.getElementById('selYear').value;
+  const d = CAR_DATA[make][model][year];
+
+  // Set fields
+  document.getElementById('price').value = d.price;
+  document.getElementById('maintenance').value = d.maint;
+
+  // Set depreciation slider
+  const deprSlider = document.getElementById('depreciation');
+  deprSlider.value = d.depr;
+  document.getElementById('depreciationVal').textContent = d.depr.toFixed(1) + '%';
+
+  document.getElementById('filledTag').style.display = 'inline-block';
+  update();
+}
+
+document.getElementById('selMake').addEventListener('change', onMakeChange);
+document.getElementById('selModel').addEventListener('change', onModelChange);
+document.getElementById('selYear').addEventListener('change', onYearChange);
+buildMakeDropdown();
 
 ['taxRate','term','buyRate','loanTerm','depreciation'].forEach(id => {
   const el = document.getElementById(id);
