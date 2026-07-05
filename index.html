@@ -632,47 +632,149 @@ const CAR_DATA = {
   },
 };
 
-function buildMakeDropdown() {
-  const sel = document.getElementById('selMake');
-  Object.keys(CAR_DATA).sort().forEach(make => {
-    const opt = document.createElement('option');
-    opt.value = make; opt.textContent = make;
-    sel.appendChild(opt);
-  });
+// ---- NHTSA LIVE API ----
+// The NHTSA API is a free US government API — no key needed.
+// We call fetch() which is JavaScript's built-in way to make HTTP requests.
+// fetch() returns a "Promise" — meaning the result arrives later (asynchronously).
+// We use async/await to pause and wait for the result before continuing.
+
+const NHTSA = 'https://vpic.nhtsa.dot.gov/api/vehicles';
+
+function setLoading(selectId, loading) {
+  const sel = document.getElementById(selectId);
+  if (loading) {
+    sel.innerHTML = '<option>Loading...</option>';
+    sel.disabled = true;
+  }
 }
 
-function onMakeChange() {
+// Called once on page load — fetches every car make from NHTSA
+async function buildMakeDropdown() {
+  const sel = document.getElementById('selMake');
+  setLoading('selMake', true);
+  try {
+    // fetch() calls the URL and waits for the response
+    const res = await fetch(`${NHTSA}/GetAllMakes?format=json`);
+    // .json() reads the response body and converts it from JSON text to a JS object
+    const data = await res.json();
+    sel.innerHTML = '<option value="">— Select Make —</option>';
+    // data.Results is the array of makes — we sort them alphabetically
+    data.Results
+      .map(m => m.Make_Name)
+      .sort()
+      .forEach(make => {
+        const opt = document.createElement('option');
+        opt.value = make; opt.textContent = make;
+        sel.appendChild(opt);
+      });
+    sel.disabled = false;
+  } catch(e) {
+    // If the API call fails for any reason, fall back to our hardcoded data
+    sel.innerHTML = '<option value="">— Select Make —</option>';
+    Object.keys(CAR_DATA).sort().forEach(make => {
+      const opt = document.createElement('option');
+      opt.value = make; opt.textContent = make;
+      sel.appendChild(opt);
+    });
+    sel.disabled = false;
+  }
+}
+
+// Called when the user picks a make — fetches models for that make
+async function onMakeChange() {
   const make = document.getElementById('selMake').value;
   const modelSel = document.getElementById('selModel');
   const yearSel = document.getElementById('selYear');
-  modelSel.innerHTML = '<option value="">— Select Model —</option>';
   yearSel.innerHTML = '<option value="">— Select Year —</option>';
-  modelSel.disabled = !make;
   yearSel.disabled = true;
   document.getElementById('autofillBtn').disabled = true;
-  if (!make) return;
-  Object.keys(CAR_DATA[make]).sort().forEach(model => {
-    const opt = document.createElement('option');
-    opt.value = model; opt.textContent = model;
-    modelSel.appendChild(opt);
-  });
+
+  if (!make) {
+    modelSel.innerHTML = '<option value="">— Select Model —</option>';
+    modelSel.disabled = true;
+    return;
+  }
+
+  setLoading('selModel', true);
+  try {
+    const res = await fetch(`${NHTSA}/GetModelsForMake/${encodeURIComponent(make)}?format=json`);
+    const data = await res.json();
+    modelSel.innerHTML = '<option value="">— Select Model —</option>';
+    data.Results
+      .map(m => m.Model_Name)
+      .sort()
+      .forEach(model => {
+        const opt = document.createElement('option');
+        opt.value = model; opt.textContent = model;
+        modelSel.appendChild(opt);
+      });
+    modelSel.disabled = false;
+  } catch(e) {
+    // Fallback to hardcoded models if we have them
+    modelSel.innerHTML = '<option value="">— Select Model —</option>';
+    const models = CAR_DATA[make] ? Object.keys(CAR_DATA[make]).sort() : [];
+    models.forEach(model => {
+      const opt = document.createElement('option');
+      opt.value = model; opt.textContent = model;
+      modelSel.appendChild(opt);
+    });
+    modelSel.disabled = false;
+  }
 }
 
-function onModelChange() {
+// Called when the user picks a model — fetches years for that make+model
+async function onModelChange() {
   const make = document.getElementById('selMake').value;
   const model = document.getElementById('selModel').value;
   const yearSel = document.getElementById('selYear');
-  yearSel.innerHTML = '<option value="">— Select Year —</option>';
-  yearSel.disabled = !model;
   document.getElementById('autofillBtn').disabled = true;
-  if (!make || !model) return;
-  Object.keys(CAR_DATA[make][model]).sort((a,b) => b-a).forEach(year => {
-    const d = CAR_DATA[make][model][year];
-    if (d.price === 0) return;
-    const opt = document.createElement('option');
-    opt.value = year; opt.textContent = year;
-    yearSel.appendChild(opt);
-  });
+
+  if (!model) {
+    yearSel.innerHTML = '<option value="">— Select Year —</option>';
+    yearSel.disabled = true;
+    return;
+  }
+
+  setLoading('selYear', true);
+  try {
+    const res = await fetch(`${NHTSA}/GetModelsForMakeYear/make/${encodeURIComponent(make)}/modelYear/2020?format=json`);
+    // NHTSA doesn't have a "get all years for a model" endpoint,
+    // so we check years 2015–2025 ourselves by calling the API for each year
+    // and seeing if the model appears. We do this in parallel with Promise.all().
+    const years = [2025,2024,2023,2022,2021,2020,2019,2018,2017,2016,2015];
+    const checks = await Promise.all(
+      years.map(yr =>
+        fetch(`${NHTSA}/GetModelsForMakeYear/make/${encodeURIComponent(make)}/modelYear/${yr}?format=json`)
+          .then(r => r.json())
+          .then(d => {
+            const found = d.Results.some(m => m.Model_Name.toLowerCase() === model.toLowerCase());
+            return found ? yr : null;
+          })
+          .catch(() => null)
+      )
+    );
+    const validYears = checks.filter(y => y !== null);
+    yearSel.innerHTML = '<option value="">— Select Year —</option>';
+    if (validYears.length === 0) {
+      // If NHTSA has no year data, fall back to our hardcoded years
+      const hardcoded = CAR_DATA[make] && CAR_DATA[make][model] ? Object.keys(CAR_DATA[make][model]).sort((a,b)=>b-a) : [];
+      hardcoded.forEach(yr => {
+        const opt = document.createElement('option');
+        opt.value = yr; opt.textContent = yr;
+        yearSel.appendChild(opt);
+      });
+    } else {
+      validYears.forEach(yr => {
+        const opt = document.createElement('option');
+        opt.value = yr; opt.textContent = yr;
+        yearSel.appendChild(opt);
+      });
+    }
+    yearSel.disabled = false;
+  } catch(e) {
+    yearSel.innerHTML = '<option value="">— Select Year —</option>';
+    yearSel.disabled = false;
+  }
 }
 
 function onYearChange() {
@@ -682,22 +784,32 @@ function onYearChange() {
   document.getElementById('autofillBtn').disabled = !hasAll;
 }
 
+// Auto-fill: uses our hardcoded CAR_DATA where available, leaves blank if not
 function doAutofill() {
   const make  = document.getElementById('selMake').value;
   const model = document.getElementById('selModel').value;
-  const year  = document.getElementById('selYear').value;
-  const d = CAR_DATA[make][model][year];
+  const year  = +document.getElementById('selYear').value;
 
-  // Set fields
-  document.getElementById('price').value = d.price;
-  document.getElementById('maintenance').value = d.maint;
+  // Look up in our hardcoded data — find the closest make/model match (case-insensitive)
+  const makeKey = Object.keys(CAR_DATA).find(k => k.toLowerCase() === make.toLowerCase());
+  const modelKey = makeKey && Object.keys(CAR_DATA[makeKey]).find(k => k.toLowerCase() === model.toLowerCase());
+  const d = modelKey && CAR_DATA[makeKey][modelKey][year];
 
-  // Set depreciation slider
-  const deprSlider = document.getElementById('depreciation');
-  deprSlider.value = d.depr;
-  document.getElementById('depreciationVal').textContent = d.depr.toFixed(1) + '%';
-
-  document.getElementById('filledTag').style.display = 'inline-block';
+  if (d && d.price > 0) {
+    document.getElementById('price').value = d.price;
+    document.getElementById('maintenance').value = d.maint;
+    const deprSlider = document.getElementById('depreciation');
+    deprSlider.value = d.depr;
+    document.getElementById('depreciationVal').textContent = d.depr.toFixed(1) + '%';
+    document.getElementById('filledTag').style.display = 'inline-block';
+    document.getElementById('filledTag').textContent = '✓ Filled';
+  } else {
+    // We have live make/model/year from NHTSA but no pricing data for this car
+    document.getElementById('filledTag').style.display = 'inline-block';
+    document.getElementById('filledTag').textContent = '⚠ No price data — enter manually';
+    document.getElementById('filledTag').style.background = '#fef9c3';
+    document.getElementById('filledTag').style.color = '#854d0e';
+  }
   update();
 }
 
