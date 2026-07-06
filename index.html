@@ -62,6 +62,43 @@
     vertical-align: middle;
   }
 
+  /* Autocomplete styles */
+  .autocomplete-wrap { position: relative; }
+  .autocomplete-wrap input[type=text] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    color: #1a1a1a;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .autocomplete-wrap input[type=text]:focus { border-color: #6366f1; }
+  .autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0; right: 0;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 100;
+    display: none;
+  }
+  .autocomplete-list.open { display: block; }
+  .autocomplete-item {
+    padding: 8px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .autocomplete-item:hover, .autocomplete-item.active { background: #f0f0ff; color: #4f46e5; }
+  .autocomplete-item:last-child { border-bottom: none; }
+
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
   @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
 
@@ -190,7 +227,10 @@
     <div class="car-selector-grid">
       <div class="field" style="margin:0">
         <label>Make</label>
-        <select id="selMake"><option value="">— Select Make —</option></select>
+        <div class="autocomplete-wrap">
+          <input type="text" id="selMake" placeholder="Type a make..." autocomplete="off">
+          <div class="autocomplete-list" id="makeList"></div>
+        </div>
       </div>
       <div class="field" style="margin:0">
         <label>Model</label>
@@ -648,69 +688,77 @@ function setLoading(selectId, loading) {
   }
 }
 
-// Called once on page load — fetches every car make from NHTSA
+// ---- MAKE AUTOCOMPLETE ----
+// We load all makes once on page load and store them in memory.
+// Then filtering happens instantly as the user types — no extra API calls needed.
+
+let allMakes = [];
+let selectedMake = '';
+
 async function buildMakeDropdown() {
-  const sel = document.getElementById('selMake');
-  setLoading('selMake', true);
   try {
-    // fetch() calls the URL and waits for the response
     const res = await fetch(`${NHTSA}/GetAllMakes?format=json`);
-    // .json() reads the response body and converts it from JSON text to a JS object
     const data = await res.json();
-    sel.innerHTML = '<option value="">— Select Make —</option>';
-    // data.Results is the array of makes — we sort them alphabetically
-    data.Results
-      .map(m => m.Make_Name)
-      .sort()
-      .forEach(make => {
-        const opt = document.createElement('option');
-        opt.value = make; opt.textContent = make;
-        sel.appendChild(opt);
-      });
-    sel.disabled = false;
+    allMakes = data.Results.map(m => m.Make_Name).sort();
   } catch(e) {
-    // If the API call fails for any reason, fall back to our hardcoded data
-    sel.innerHTML = '<option value="">— Select Make —</option>';
-    Object.keys(CAR_DATA).sort().forEach(make => {
-      const opt = document.createElement('option');
-      opt.value = make; opt.textContent = make;
-      sel.appendChild(opt);
-    });
-    sel.disabled = false;
+    allMakes = Object.keys(CAR_DATA).sort();
   }
 }
 
-// Called when the user picks a make — fetches models for that make
-async function onMakeChange() {
-  const make = document.getElementById('selMake').value;
+function showMakeSuggestions(query) {
+  const list = document.getElementById('makeList');
+  if (!query) { list.classList.remove('open'); return; }
+  const matches = allMakes
+    .filter(m => m.toLowerCase().includes(query.toLowerCase()))
+    .slice(0, 10);
+  if (matches.length === 0) { list.classList.remove('open'); return; }
+  list.innerHTML = matches.map(m =>
+    `<div class="autocomplete-item" onclick="selectMake('${m.replace(/'/g, "\\'")}')">${m}</div>`
+  ).join('');
+  list.classList.add('open');
+}
+
+function selectMake(make) {
+  selectedMake = make;
+  document.getElementById('selMake').value = make;
+  document.getElementById('makeList').classList.remove('open');
+  loadModelsForMake(make);
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.autocomplete-wrap')) {
+    document.getElementById('makeList').classList.remove('open');
+  }
+});
+
+document.getElementById('selMake').addEventListener('input', e => {
+  selectedMake = '';
+  document.getElementById('selModel').innerHTML = '<option value="">— Select Model —</option>';
+  document.getElementById('selModel').disabled = true;
+  document.getElementById('selYear').innerHTML = '<option value="">— Select Year —</option>';
+  document.getElementById('selYear').disabled = true;
+  document.getElementById('autofillBtn').disabled = true;
+  showMakeSuggestions(e.target.value);
+});
+
+async function loadModelsForMake(make) {
   const modelSel = document.getElementById('selModel');
   const yearSel = document.getElementById('selYear');
   yearSel.innerHTML = '<option value="">— Select Year —</option>';
   yearSel.disabled = true;
   document.getElementById('autofillBtn').disabled = true;
-
-  if (!make) {
-    modelSel.innerHTML = '<option value="">— Select Model —</option>';
-    modelSel.disabled = true;
-    return;
-  }
-
   setLoading('selModel', true);
   try {
     const res = await fetch(`${NHTSA}/GetModelsForMake/${encodeURIComponent(make)}?format=json`);
     const data = await res.json();
     modelSel.innerHTML = '<option value="">— Select Model —</option>';
-    data.Results
-      .map(m => m.Model_Name)
-      .sort()
-      .forEach(model => {
-        const opt = document.createElement('option');
-        opt.value = model; opt.textContent = model;
-        modelSel.appendChild(opt);
-      });
+    data.Results.map(m => m.Model_Name).sort().forEach(model => {
+      const opt = document.createElement('option');
+      opt.value = model; opt.textContent = model;
+      modelSel.appendChild(opt);
+    });
     modelSel.disabled = false;
   } catch(e) {
-    // Fallback to hardcoded models if we have them
     modelSel.innerHTML = '<option value="">— Select Model —</option>';
     const models = CAR_DATA[make] ? Object.keys(CAR_DATA[make]).sort() : [];
     models.forEach(model => {
@@ -786,7 +834,7 @@ function onYearChange() {
 
 // Auto-fill: uses our hardcoded CAR_DATA where available, leaves blank if not
 function doAutofill() {
-  const make  = document.getElementById('selMake').value;
+  const make  = selectedMake || document.getElementById('selMake').value;
   const model = document.getElementById('selModel').value;
   const year  = +document.getElementById('selYear').value;
 
@@ -813,7 +861,6 @@ function doAutofill() {
   update();
 }
 
-document.getElementById('selMake').addEventListener('change', onMakeChange);
 document.getElementById('selModel').addEventListener('change', onModelChange);
 document.getElementById('selYear').addEventListener('change', onYearChange);
 buildMakeDropdown();
