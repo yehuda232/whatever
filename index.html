@@ -50,6 +50,25 @@
   .autofill-btn:hover { background: #4f46e5; }
   .autofill-btn:disabled { background: #aaa; cursor: not-allowed; }
   .autofill-note { font-size: 11px; color: #888; margin-top: 10px; }
+  .vin-divider {
+    text-align: center;
+    font-size: 11px;
+    color: #aaa;
+    margin: 14px 0 12px;
+    position: relative;
+  }
+  .vin-divider::before, .vin-divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 38%;
+    height: 1px;
+    background: #e0e0e0;
+  }
+  .vin-divider::before { left: 0; }
+  .vin-divider::after { right: 0; }
+  .vin-row { display: flex; gap: 10px; align-items: flex-end; }
+
   .filled-tag {
     display: inline-block;
     font-size: 10px;
@@ -243,6 +262,17 @@
       <button class="autofill-btn" id="autofillBtn" disabled onclick="doAutofill()">Auto-fill</button>
     </div>
     <p class="autofill-note">Fills in: vehicle price, depreciation rate, and annual maintenance based on published averages. All values can still be edited manually.</p>
+
+    <div class="vin-divider">— or look up by VIN —</div>
+
+    <div class="vin-row">
+      <div class="field" style="margin:0;flex:1">
+        <label>VIN Number</label>
+        <input type="text" id="vinInput" placeholder="Enter 17-character VIN..." maxlength="17" autocomplete="off" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:monospace;letter-spacing:1px;outline:none;">
+      </div>
+      <button class="autofill-btn" id="vinBtn" onclick="lookupVIN()">Look Up</button>
+    </div>
+    <div id="vinStatus" style="font-size:12px;margin-top:8px;display:none;"></div>
   </div>
 
   <div class="grid">
@@ -860,6 +890,95 @@ function doAutofill() {
   }
   update();
 }
+
+// ---- VIN LOOKUP ----
+// This calls our own Vercel serverless function at /api/vin
+// which then securely calls auto.dev with our hidden API key
+
+async function lookupVIN() {
+  const vin = document.getElementById('vinInput').value.trim().toUpperCase();
+  const status = document.getElementById('vinStatus');
+  const btn = document.getElementById('vinBtn');
+
+  // Validate length before even calling the API
+  if (vin.length !== 17) {
+    status.style.display = 'block';
+    status.style.color = '#b45309';
+    status.textContent = '⚠ A VIN must be exactly 17 characters. You entered ' + vin.length + '.';
+    return;
+  }
+
+  // Show loading state
+  btn.disabled = true;
+  btn.textContent = 'Looking up...';
+  status.style.display = 'block';
+  status.style.color = '#555';
+  status.textContent = 'Contacting auto.dev...';
+
+  try {
+    // Call OUR Vercel function — not auto.dev directly
+    // /api/vin is the path to api/vin.js on Vercel
+    const res = await fetch(`/api/vin?vin=${vin}`);
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Unknown error');
+    }
+
+    // auto.dev returns make, model, year among other fields
+    const year  = data.year  || data.modelYear;
+    const make  = data.make  || data.manufacturer;
+    const model = data.model || data.series;
+
+    // Fill in the make text box and trigger model loading
+    if (make) {
+      document.getElementById('selMake').value = make;
+      selectedMake = make;
+      await loadModelsForMake(make);
+    }
+
+    // Fill in year if we have it
+    if (year) {
+      const yearSel = document.getElementById('selYear');
+      // Try to select the matching year option
+      const opt = [...yearSel.options].find(o => o.value == year);
+      if (opt) opt.selected = true;
+    }
+
+    // Try to auto-fill pricing from our hardcoded data
+    if (make && model && year) {
+      const makeKey = Object.keys(CAR_DATA).find(k => k.toLowerCase() === make.toLowerCase());
+      const modelKey = makeKey && Object.keys(CAR_DATA[makeKey]).find(k => k.toLowerCase() === model.toLowerCase());
+      const d = modelKey && CAR_DATA[makeKey][modelKey][+year];
+      if (d && d.price > 0) {
+        document.getElementById('price').value = d.price;
+        document.getElementById('maintenance').value = d.maint;
+        document.getElementById('depreciation').value = d.depr;
+        document.getElementById('depreciationVal').textContent = d.depr.toFixed(1) + '%';
+      }
+    }
+
+    status.style.color = '#15803d';
+    status.textContent = `✓ Found: ${year || ''} ${make || ''} ${model || ''}`;
+    document.getElementById('filledTag').style.display = 'inline-block';
+    document.getElementById('filledTag').textContent = '✓ Filled via VIN';
+    document.getElementById('filledTag').style.background = '#d1fae5';
+    document.getElementById('filledTag').style.color = '#065f46';
+    update();
+
+  } catch(e) {
+    status.style.color = '#b91c1c';
+    status.textContent = '✗ ' + (e.message || 'Could not look up that VIN. Please check and try again.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Look Up';
+  }
+}
+
+// Allow pressing Enter in the VIN field to trigger lookup
+document.getElementById('vinInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') lookupVIN();
+});
 
 document.getElementById('selModel').addEventListener('change', onModelChange);
 document.getElementById('selYear').addEventListener('change', onYearChange);
