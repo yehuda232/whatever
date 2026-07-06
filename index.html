@@ -24,7 +24,10 @@
   }
   .car-selector h2 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
   .car-selector-grid { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
-  @media (max-width: 600px) { .car-selector-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) {
+    .car-selector-grid { grid-template-columns: 1fr 1fr; }
+    .car-selector-grid .autofill-btn { grid-column: 1 / -1; width: 100%; }
+  }
   .car-selector select {
     width: 100%;
     padding: 8px 10px;
@@ -68,6 +71,36 @@
   .vin-divider::before { left: 0; }
   .vin-divider::after { right: 0; }
   .vin-row { display: flex; gap: 10px; align-items: flex-end; }
+  @media (max-width: 600px) { .vin-row { flex-direction: column; } .vin-row .autofill-btn { width: 100%; } }
+
+  .lease-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  @media (max-width: 600px) { .lease-grid { grid-template-columns: 1fr 1fr; } }
+
+  /* Mobile-specific improvements */
+  @media (max-width: 600px) {
+    .app { padding: 14px 12px; }
+    h1 { font-size: 18px; }
+
+    /* Bigger tap targets for inputs on mobile */
+    .field input[type=number],
+    .field select,
+    .autocomplete-wrap input[type=text] {
+      padding: 11px 12px;
+      font-size: 16px; /* prevents iOS from auto-zooming on focus */
+    }
+
+    /* Bigger buttons */
+    .autofill-btn { padding: 11px 16px; font-size: 14px; }
+
+    /* Result total slightly smaller so it fits */
+    .result-total { font-size: 22px; }
+
+    /* Chart section — reduce padding */
+    .chart-section { padding: 14px 12px; }
+
+    /* Yearly table — make it scrollable horizontally if needed */
+    .chart-section:last-child { overflow-x: auto; }
+  }
 
   .filled-tag {
     display: inline-block;
@@ -341,7 +374,7 @@
 
     <div class="card" style="grid-column: 1 / -1;">
       <h2>Leasing <span class="badge badge-lease">LEASE</span></h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div class="lease-grid">
         <div class="field">
           <label>Monthly Payment ($)</label>
           <input type="number" id="leasePayment" value="450" min="0" step="10">
