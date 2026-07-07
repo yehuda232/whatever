@@ -768,10 +768,15 @@ async function buildMakeDropdown() {
     const res = await fetch(`${NHTSA}/GetAllMakes?format=json`);
     const data = await res.json();
     const nhtsaMakes = data.Results.map(m => m.Make_Name);
-    // Merge NHTSA makes with our hardcoded ones so brands like Polestar
-    // always appear even if NHTSA doesn't have them
-    const combined = new Set([...nhtsaMakes, ...Object.keys(CAR_DATA)]);
-    allMakes = [...combined].sort();
+    // Merge NHTSA makes with our hardcoded ones, deduplicating case-insensitively.
+    // Where a hardcoded name exists, prefer it (better casing like "Polestar" over "POLESTAR").
+    const seen = new Map();
+    [...nhtsaMakes, ...Object.keys(CAR_DATA)].forEach(m => {
+      const key = m.toLowerCase();
+      if (!seen.has(key)) seen.set(key, m);
+      else if (Object.keys(CAR_DATA).includes(m)) seen.set(key, m); // prefer our casing
+    });
+    allMakes = [...seen.values()].sort();
   } catch(e) {
     allMakes = Object.keys(CAR_DATA).sort();
   }
