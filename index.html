@@ -767,7 +767,11 @@ async function buildMakeDropdown() {
   try {
     const res = await fetch(`${NHTSA}/GetAllMakes?format=json`);
     const data = await res.json();
-    allMakes = data.Results.map(m => m.Make_Name).sort();
+    const nhtsaMakes = data.Results.map(m => m.Make_Name);
+    // Merge NHTSA makes with our hardcoded ones so brands like Polestar
+    // always appear even if NHTSA doesn't have them
+    const combined = new Set([...nhtsaMakes, ...Object.keys(CAR_DATA)]);
+    allMakes = [...combined].sort();
   } catch(e) {
     allMakes = Object.keys(CAR_DATA).sort();
   }
@@ -819,8 +823,15 @@ async function loadModelsForMake(make) {
   try {
     const res = await fetch(`${NHTSA}/GetModelsForMake/${encodeURIComponent(make)}?format=json`);
     const data = await res.json();
+    // If NHTSA returns no results, fall back to our hardcoded data
+    const nhtsaModels = data.Results.map(m => m.Model_Name);
+    const makeKey = Object.keys(CAR_DATA).find(k => k.toLowerCase() === make.toLowerCase());
+    const hardcodedModels = makeKey ? Object.keys(CAR_DATA[makeKey]) : [];
+    const models = nhtsaModels.length > 0
+      ? [...new Set([...nhtsaModels, ...hardcodedModels])].sort()
+      : hardcodedModels.sort();
     modelSel.innerHTML = '<option value="">— Select Model —</option>';
-    data.Results.map(m => m.Model_Name).sort().forEach(model => {
+    models.forEach(model => {
       const opt = document.createElement('option');
       opt.value = model; opt.textContent = model;
       modelSel.appendChild(opt);
